@@ -5,18 +5,19 @@ public static class FunctionLibrary
 {
     public delegate Vector3 Function(float u, float v, float t);
 
-    static Function[] functions = {Wave, MultiWave, Ripple};
+    static Function[] functions = { Wave, MultiWave, Ripple, Sphere };
 
     public enum FunctionName
     {
         Wave,
         MultiWave,
-        Ripple
+        Ripple,
+        Sphere
     }
 
     public static Function GetFunction(FunctionName name)
     {
-        return functions[(int) name];
+        return functions[(int)name];
     }
 
     public static Vector3 Wave(float u, float v, float t)
@@ -48,6 +49,17 @@ public static class FunctionLibrary
         p.y = Sin(PI * (4f * d - t));
         p.y /= 1f + 10f * d;
         p.z = v;
+        return p;
+    }
+
+    public static Vector3 Sphere(float u, float v, float t)
+    {
+        Vector3 p;
+        float r = 0.9f + 0.1f * Sin(8f * PI  * v);
+        float s = r * Cos(0.5f * PI * v);
+        p.x = s * Sin(PI * u);
+        p.y = r * Sin(PI * 0.5f * v);
+        p.z = s * Cos(PI * u);
         return p;
     }
 }
