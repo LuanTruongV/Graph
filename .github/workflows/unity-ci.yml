@@ -24,7 +24,7 @@ jobs:
       - name: Build Android
         uses: game-ci/unity-builder@v4
         with:
-          unityVersion: 2022.3.5f1
+          unityVersion: 2022.3.52f1
           targetPlatform: Android
 
       - name: Upload Build
