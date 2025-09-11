@@ -5,7 +5,7 @@ using UnityEngine;
 
 public class Grap : MonoBehaviour
 {
-    //aaaabb
+    //aaaabbcc
     [SerializeField] private Transform _pointPrefab;
     [SerializeField][Range(10,100)] private int _resolution;
     [SerializeField]
