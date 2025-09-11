@@ -1,0 +1,32 @@
+name: Unity CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Android
+        uses: game-ci/unity-builder@v4
+        with:
+          unityVersion: 2022.3.5f1
+          targetPlatform: Android
+
+      - name: Upload Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Build
+          path: build/Android
+
+      - name: Notify Telegram
+        run: |
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
+          -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+          -d text="✅ Build *Android* (Unity 2022.3.5f1) hoàn tất trên branch *${{ github.ref_name }}*" \
+          -d parse_mode="Markdown"
