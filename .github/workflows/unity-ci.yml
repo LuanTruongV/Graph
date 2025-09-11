@@ -15,82 +15,69 @@ jobs:
         build-target: [Android]
 
     steps:
-      # Checkout source
+      # 1. Checkout source
       - uses: actions/checkout@v4
         with:
           clean: true
           lfs: true
-          submodules: 'recursive'
+          submodules: recursive
 
-      # Setup Unity
+      # 2. Setup Unity
       - uses: buildalon/unity-setup@v1
         with:
-          build-targets: '${{ matrix.build-target }}'
+          build-targets: ${{ matrix.build-target }}
 
-      # Kích hoạt Unity Personal License
+      # 3. Activate Unity Personal License (giữ như cũ bạn dùng)
       - uses: buildalon/activate-unity-license@v1
         with:
-          license: 'Personal'
-          username: '${{ secrets.UNITY_USERNAME }}'
-          password: '${{ secrets.UNITY_PASSWORD }}'
+          license: Personal
+          username: ${{ secrets.UNITY_USERNAME }}
+          password: ${{ secrets.UNITY_PASSWORD }}
 
-      # Thêm Build Pipeline Package (nếu dùng Buildalon)
+      # 4. (Optional) Add Build Pipeline Package
       - name: Add Build Pipeline Package
         working-directory: ${{ env.UNITY_PROJECT_PATH }}
         run: |
           npm install -g openupm-cli
           openupm add com.virtualmaker.buildalon
 
-      # Validate Project
+      # 5. Validate Project
       - uses: buildalon/unity-action@v1
         name: Project Validation
         with:
-          log-name: 'project-validation'
-          build-target: '${{ matrix.build-target }}'
-          args: '-quit -batchmode -executeMethod Buildalon.Editor.BuildPipeline.UnityPlayerBuildTools.ValidateProject'
+          log-name: project-validation
+          build-target: ${{ matrix.build-target }}
+          args: -quit -batchmode -executeMethod Buildalon.Editor.BuildPipeline.UnityPlayerBuildTools.ValidateProject
 
-      # Build Android
+      # 6. Build Android
       - uses: buildalon/unity-action@v1
-        name: '${{ matrix.build-target }}-Build'
+        name: ${{ matrix.build-target }} Build
         with:
-          log-name: '${{ matrix.build-target }}-Build'
-          build-target: '${{ matrix.build-target }}'
-          args: '-quit -batchmode -executeMethod Buildalon.Editor.BuildPipeline.UnityPlayerBuildTools.StartCommandLineBuild'
+          log-name: ${{ matrix.build-target }}-build
+          build-target: ${{ matrix.build-target }}
+          args: -quit -batchmode -executeMethod Buildalon.Editor.BuildPipeline.UnityPlayerBuildTools.StartCommandLineBuild
 
-      # Upload artifacts
+      # 7. Upload artifacts (APK + logs)
       - uses: actions/upload-artifact@v4
-        id: upload-artifact
-        name: 'Upload ${{ matrix.build-target }} Artifacts'
+        name: Upload ${{ matrix.build-target }} Artifacts
         if: success() || failure()
         with:
+          name: ${{ github.run_number }}.${{ github.run_attempt }}-${{ matrix.build-target }}-Artifacts
           compression-level: 0
           retention-days: 1
-          name: '${{ github.run_number }}.${{ github.run_attempt }}-${{ matrix.build-target }}-Artifacts'
           path: |
             ${{ github.workspace }}/**/*.log
             ${{ env.UNITY_PROJECT_PATH }}/Builds/Android/**/*.apk
 
-      # Clean artifacts
+      # 8. Clean artifacts (bash thay pwsh)
       - name: Clean Artifacts
         if: always()
-        shell: pwsh
         run: |
-          # Clean Logs
-          Get-ChildItem -Path "${{ env.UNITY_PROJECT_PATH }}" -File -Filter "*.log" -Recurse | Remove-Item -Force
+          echo "::debug::Cleaning logs and build artifacts..."
+          find "${{ env.UNITY_PROJECT_PATH }}" -name "*.log" -type f -delete
+          rm -rf "${{ env.UNITY_PROJECT_PATH }}/Builds"
 
-          $artifacts = "${{ env.UNITY_PROJECT_PATH }}/Builds"
-          Write-Host "::debug::Build artifacts path: $artifacts"
-
-          if (Test-Path -Path $artifacts) {
-            try {
-              Remove-Item $artifacts -Recurse -Force
-            } catch {
-              Write-Warning "Failed to delete artifacts folder file: $_"
-            }
-          } else {
-            Write-Host "::debug::Artifacts folder not found."
-
-      # Telegram Notification
+      # 9. Telegram Notification
       - name: Notify Telegram
         if: always()
         run: |
