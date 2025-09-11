@@ -4,39 +4,97 @@ on:
   push:
     branches: [ "master" ]
 
+env:
+  UNITY_PROJECT_PATH: ${{ github.workspace }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build-target: [Android]
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # 👉 Kích hoạt license bằng username/password/serial
-      - name: Activate Unity License
-        uses: game-ci/unity-activate@v2
+      # Checkout source
+      - uses: actions/checkout@v4
         with:
-          unityVersion: 2022.3.5f1
-          username: ${{ secrets.UNITY_EMAIL }}
-          password: ${{ secrets.UNITY_PASSWORD }}
-          serial: ${{ secrets.UNITY_SERIAL }}
+          clean: true
+          lfs: true
+          submodules: 'recursive'
 
-      - name: Build Android
-        uses: game-ci/unity-builder@v4
+      # Setup Unity
+      - uses: buildalon/unity-setup@v1
         with:
-          unityVersion: 2022.3.52f1
-          targetPlatform: Android
+          build-targets: '${{ matrix.build-target }}'
 
-      - name: Upload Build
-        uses: actions/upload-artifact@v4
+      # Kích hoạt Unity Personal License
+      - uses: buildalon/activate-unity-license@v1
         with:
-          name: Android-Build
-          path: build/Android
+          license: 'Personal'
+          username: '${{ secrets.UNITY_USERNAME }}'
+          password: '${{ secrets.UNITY_PASSWORD }}'
 
-      - name: Notify Telegram
-        if: always() # báo về cả khi fail
+      # Thêm Build Pipeline Package (nếu dùng Buildalon)
+      - name: Add Build Pipeline Package
+        working-directory: ${{ env.UNITY_PROJECT_PATH }}
         run: |
-          STATUS="✅ Build *Android* (Unity 2022.3.5f1) thành công trên branch *${{ github.ref_name }}*"
+          npm install -g openupm-cli
+          openupm add com.virtualmaker.buildalon
+
+      # Validate Project
+      - uses: buildalon/unity-action@v1
+        name: Project Validation
+        with:
+          log-name: 'project-validation'
+          build-target: '${{ matrix.build-target }}'
+          args: '-quit -batchmode -executeMethod Buildalon.Editor.BuildPipeline.UnityPlayerBuildTools.ValidateProject'
+
+      # Build Android
+      - uses: buildalon/unity-action@v1
+        name: '${{ matrix.build-target }}-Build'
+        with:
+          log-name: '${{ matrix.build-target }}-Build'
+          build-target: '${{ matrix.build-target }}'
+          args: '-quit -batchmode -executeMethod Buildalon.Editor.BuildPipeline.UnityPlayerBuildTools.StartCommandLineBuild'
+
+      # Upload artifacts
+      - uses: actions/upload-artifact@v4
+        id: upload-artifact
+        name: 'Upload ${{ matrix.build-target }} Artifacts'
+        if: success() || failure()
+        with:
+          compression-level: 0
+          retention-days: 1
+          name: '${{ github.run_number }}.${{ github.run_attempt }}-${{ matrix.build-target }}-Artifacts'
+          path: |
+            ${{ github.workspace }}/**/*.log
+            ${{ env.UNITY_PROJECT_PATH }}/Builds/Android/**/*.apk
+
+      # Clean artifacts
+      - name: Clean Artifacts
+        if: always()
+        shell: pwsh
+        run: |
+          # Clean Logs
+          Get-ChildItem -Path "${{ env.UNITY_PROJECT_PATH }}" -File -Filter "*.log" -Recurse | Remove-Item -Force
+
+          $artifacts = "${{ env.UNITY_PROJECT_PATH }}/Builds"
+          Write-Host "::debug::Build artifacts path: $artifacts"
+
+          if (Test-Path -Path $artifacts) {
+            try {
+              Remove-Item $artifacts -Recurse -Force
+            } catch {
+              Write-Warning "Failed to delete artifacts folder file: $_"
+            }
+          } else {
+            Write-Host "::debug::Artifacts folder not found."
+
+      # Telegram Notification
+      - name: Notify Telegram
+        if: always()
+        run: |
+          STATUS="✅ Build *Android* (Unity 2022.3 Personal) thành công trên branch *${{ github.ref_name }}*"
           if [ "${{ job.status }}" != "success" ]; then STATUS="❌ Build Android thất bại trên branch *${{ github.ref_name }}*"; fi
           curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
             -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
